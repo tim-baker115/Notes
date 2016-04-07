@@ -1,0 +1,57 @@
+Introduction
+
+These instructions will detail how to setup and troubleshoot an HLS stream (HTTP Live Streaming) using Linux. It will also detail how to encrypt the stream via AES.
+[edit] Prerequisites
+
+The following tools are required in order to setup HLS.
+
+    Apache or a similar web server.
+    Openssl
+    xxd (this may not be necessary if you already have the key).
+    A Recent version of ffmpeg.
+    A video file/transport stream.
+    vlc client for testing purposes. 
+
+[edit] File conversion
+
+Ffmpeg will divide the file into small pieces at specific time increments (in this example every 10 seconds as defined by -hls_time 10). The process will also create an .m3u8 file which instructs the client how to playback the video and any attributes necessary for playback.
+
+   ffmpeg -i "<input_file.ts>" -codec copy -hls_time 10 "<output_file.m3u8>"
+
+[edit] File encryption
+
+These steps involve creating a key or using a predefined key to encrypt the file. This step can be skipped if encryption is not necessary.
+[edit] Predefined Key
+
+These steps are divided into two, in the first instance only the hexidecimal string is known, with this information a key will be created which will then be used to encrypt the files. In the second instance, the key is already present on the system and can be used without any alteration.
+[edit] Have a string of hex
+
+You should have a set of characters similar to the following: 00112233445566778899aabbccddeeff.
+
+    Reformat the string so it resembles hex, this involves putting a space between every two characters, e.g 00 11 22 33 44 55 66 77 88 99 aa bb cc dd ee ff.
+    Make sure the string begins 00: again, making it closely resemble hex.
+    Echo out the string sequence, then pipe it into xdd using the -r flag to reverse it, then pipe this output into a file (this will be the key). 
+
+    echo "00: 00 11 22 33 44 55 66 77 88 99 aa bb cc dd ee ff" | xxd -r > key_file.key
+
+[edit] Have a key file
+
+Place the key file in the same location as your m3u8 file.
+[edit] New Key
+
+Run the following commands to create a new key file, this uses openssl to create a random string of hexidecimal characters.
+
+   openssl rand 16 > key_file.key
+
+[edit] File encryption
+
+The following command should be run on each of the files created previously by ffmpeg.
+
+       openssl aes-128-cbc -e -in <input file> -out <output file> -nosalt -iv `printf '%032x' <input file>` -K `cat key_file.key | hexdump -e '16/1 "%02x"'`
+
+[edit] Specify key file in m3u8
+
+Add the following lines to the m3u8 file, replacing the keyfile with your own key file.
+
+    #EXT-X-ALLOW-CACHE:YES
+    #EXT-X-KEY:METHOD=AES-128,URI="<key_file.key>"

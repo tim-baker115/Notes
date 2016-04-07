@@ -1,0 +1,38 @@
+Agent
+
+Recreate certificates
+
+   puppet agent --test --noop
+
+Remove certificates
+
+   find /etc/puppetlabs/puppet/ssl -name $(hostname).pem -delete
+
+[edit] Master
+
+List pending certificates
+
+   puppet cert list
+
+Sign agent certificates
+
+   puppet cert sign <agent_hostname>
+
+Sign all pending certificates
+
+   puppet cert sign --all
+
+Remove stale certificates
+
+    puppet cert clean <agent_hostname>
+    Run this twice (no idea why, but doesn't work after one time).
+
+[edit] Config management
+
+Pull latest manifest
+
+   puppet agent --test
+
+Validate manifest
+
+    puppet parser validate <file name>.pp

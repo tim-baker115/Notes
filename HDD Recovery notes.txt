@@ -1,0 +1,51 @@
+Things to look out for
+
+Below is a list of things to look out for which are typical of a failing hard disk:
+
+    System instability (especially on systems with a single hard drive).
+    Partitions forcefully unmounted.
+    Disk noise and clicking (implicit of a physical failure).
+    Data lost.
+    Errors in fsck/xfs_repair.
+    Errors in dmesg/syslog identifying the disk as faulty.
+    SMART errors if disk scans are carried out via cron (errors will be in the log but will contain more detail then a forced umount). 
+
+[edit] Identify exactly which disk/partition is at fault
+
+Identify if the disk has bad blocks, this will fundamentally demonstrate a fault (this step may not be needed if the disk fails to mount for example).
+
+   badblocks -vn /dev/<partition or disk>
+
+Make a note of any disk labels (these will be used at a later point):
+
+   lsblk -o name,mountpoint,label,size,uuid
+
+[edit] Cautious Duplication
+
+    Run a live tool which has disk recovery tools present (such as SystemResuce disk) on it (such as ddrescue).
+    Do not mount any partitions
+    Run the following command, setting the source (sdx in this example) and destination (sdy in this example) where appropriate. 
+
+   ddrescue -d -f -r3 /dev/sdx /dev/sdy
+
+[edit] Duplication
+
+    Unmount any disks you wish to duplicate (umount /dev/sdx), if the root partition is on this disk then get into single user mode.
+    Run the following command, setting the source (sdx in this example) and destination (sdy in this example) where appropriate. 
+
+   dd if=/dev/sdx of=/dev/sdy
+
+[edit] Backing up a disk layout
+
+sfdisk is a tool which can read the partition layout of a disk and either back it up to a text file or copy it to a new disk, it can be useful if there are concerns about the partition table or if a disk is to be replaced which is bigger/smaller than the original disk.
+[edit] Copy partition table to new disk
+
+   sfdisk -d /dev/sdx | sfdisk /dev/sdy
+
+[edit] Copy a partition table to a text file
+
+   sfdisk -d /dev/sdx > /partition.table
+
+[edit] Restore a partition table from a text file
+
+   sfdisk /dev/sdx < /partition.table

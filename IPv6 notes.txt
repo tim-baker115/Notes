@@ -1,0 +1,294 @@
+Types of Provisioning
+
+There are four types of address provisioning within IPv6. The router has the final say regarding how clients deal with the information they receive from routers or DHCP. This is done by specifying two flags: M (managed address configuration) and O (other address configuration). These flags dictate how the information is presented/used within the network. RADVD allows users to set each of these flags individually:
+State Number 	M Flag 	O Flag 	State 	DHCPv6 Configuration 	RADVD Configuration 	Explanation
+1 	0 	0 	Stateless 	Not applicable 	Example 1 	This combination corresponds to a network without a DHCPv6 infrastructure. Hosts use router advertisements for non-link-local addresses and other methods (such as manual configuration) to configure other settings. SLAAC is used to provide IP addressing in this method.
+2 	0 	1 	Stateless 	Example 2 	Example 2 	DHCPv6 is not used to assign addresses, only to assign other configuration settings. Neighboring routers are configured to advertise non-link-local address prefixes from which IPv6 hosts derive stateless addresses. This combination is known as DHCPv6 stateless: DHCPv6 is not assigning stateful addresses to IPv6 hosts, but stateless configuration settings.
+3 	1 	0 	Stateful 	Example 3 	Example 3 	In this combination, DHCPv6 is used for address configuration but not for other settings. Because IPv6 hosts typically need to be configured with other settings, such as the IPv6 addresses of Domain Name System (DNS) servers, this is an unlikely combination.
+4 	1 	1 	Stateful 	Example 4 	Example 4 	DHCPv6 is used for both addresses and other configuration settings. This combination is known as DHCPv6 stateful, in which DHCPv6 is assigning stateful addresses to IPv6 hosts.
+[edit] Flag definitions
+
+Note that despite the managed and other flags being set, this is still an advisory, if for example the managed flag is set but DHCPv6 is none function for any reason, SLAAC will be used as an alternative method of addressing rather than creating an error. Definitions of the flags according to RADVD are supplied below.
+[edit] Managed Flag
+
+   AdvManagedFlag on|off
+   When set, hosts use the administered (stateful) protocol for address autoconfiguration in addition to any addresses autoconfigured using stateless address autoconfiguration. 
+   The use of this flag is described in RFC 4862.
+   Default: off
+
+[edit] Other Flag
+
+   AdvOtherConfigFlag on|off
+   When set, hosts use the administered (stateful) protocol for autoconfiguration of other (non-address) information. The use of this flag is described in RFC 4862.
+   Default: off
+
+The other information includes but is not limited to: DNS Server, domain name suffix, NTP server, TFTP server, SIP server etc.
+[edit] Packet Capture Example
+
+The following is a router advertisement which uses method 3. We can observe the following fact from the radvd config file and the packet capture (code is in the following print):
+
+    The managed flag is set to on (AdvManagedFlag).
+    The other flag is set to off (AdvOtherConfigFlag).
+    The router timeout is 180 seconds (AdvDefaultLifetime).
+    The prefix is 2002::c23c:5d3c with a length of 120 (specified by the prefix, this includes the length of the prefix).
+        The on-link flag is set to on (AdvOnLink).
+        The autonomous address flag is set to on (AdvAutonomous).
+        The router is not set to advertise it's own address (AdvRouterAddr).
+        The valid lifetime is 600 seconds (AdvValidLifetime).
+        The proffered lifetime is 300 seconds (AdvPreferredLifetime). 
+    The recursive DNS server is specified within the router advertisement as 2002::c23c:5d3c (RDNSS).
+        The recursive DNS server has a lifetime of 300 seconds (AdvRDNSSLifetime). 
+
+IPv6 packet capture2 ra.png
+[edit] RADVD Configuration Examples
+[edit] Notes
+
+    It must be noted that the prefix must be /64. This is because 64 bits are used to generate the last part of the address using the network cards ID (you can't announce a /48 or /80 prefix with radvd). 
+
+    Run the following command to enable forwarding for IPv6 
+
+   echo 1 > /proc/sys/net/ipv6/conf/all/forwarding
+
+[edit] State 1
+
+   interface <interface> {
+           AdvManagedFlag off;
+           AdvOtherConfigFlag off;
+           AdvSendAdvert on;
+           AdvLinkMTU 1480;
+   };
+
+[edit] State 2
+
+   interface <interface name> {
+       AdvManagedFlag off;
+       AdvSendAdvert on;
+       AdvOtherConfigFlag on;
+       MinRtrAdvInterval 3;
+       MaxRtrAdvInterval 300;
+       AdvDefaultLifetime 180;
+       RDNSS <IPv6 DNS server>
+       {
+               AdvRDNSSLifetime 300;
+       };
+       prefix <router address>/>suffix>{
+               AdvOnLink on;
+               AdvAutonomous on;
+               AdvRouterAddr off;
+               AdvPreferredLifetime 300;
+               AdvValidLifetime 600;
+       };
+   };
+
+[edit] State 3
+
+   interface <interface name> {
+       AdvManagedFlag on;
+       AdvSendAdvert on;
+       AdvOtherConfigFlag off;
+       MinRtrAdvInterval 3;
+       MaxRtrAdvInterval 300;
+       AdvDefaultLifetime 180;
+       RDNSS <IPv6 DNS server>
+       {
+               AdvRDNSSLifetime 300;
+       };
+       prefix <router address>/>suffix>{
+               AdvOnLink on;
+               AdvAutonomous on;
+               AdvRouterAddr off;
+               AdvPreferredLifetime 300;
+               AdvValidLifetime 600;
+       };
+   };
+
+[edit] State 4
+
+   interface <interface name> {
+       AdvManagedFlag on;
+       AdvSendAdvert on;
+       AdvOtherConfigFlag on;
+       MinRtrAdvInterval 3;
+       MaxRtrAdvInterval 300;
+       AdvDefaultLifetime 180;
+       RDNSS <IPv6 DNS server>
+       {
+               AdvRDNSSLifetime 300;
+       };
+       prefix <router address>/>suffix>{
+               AdvOnLink on;
+               AdvAutonomous on;
+               AdvRouterAddr off;
+               AdvPreferredLifetime 300;
+               AdvValidLifetime 600;
+       };
+   };
+
+[edit] Debugging Routing Advertisements
+[edit] Using rdisc6
+
+Firstly install the ndisc package, this will include rdisc which is used to retrieve information about routing advertisements. The code below assumes a debian based system use yum to install if using a redhat based system.
+
+   apt-get install ndisc6
+
+Next run the following command, replacing <interface> with the interface radvd is configured to listen on:
+
+   rdisc6 <interface>
+
+This should output something similar to the following, here we can see the managed flags and other flags are specified:
+
+   Hop limit                 :           64 (      0x40)
+   Stateful address conf.    :          Yes
+   Stateful other conf.      :           No
+   Router preference         :       medium
+   Router lifetime           :          180 (0x000000b4) seconds
+   Reachable time            :  unspecified (0x00000000)
+   Retransmit time           :  unspecified (0x00000000)
+    Prefix                   : 2002::c23c:5d3c/120
+     Valid time              :          600 (0x00000258) seconds
+     Pref. time              :          300 (0x0000012c) seconds
+    Recursive DNS server     : 2002::c23c:5d3c
+     DNS server lifetime     :          300 (0x0000012c) seconds
+    Source link-layer address: 00:25:90:0C:35:4A
+   from fe80::225:90ff:fe0c:354a
+
+[edit] Using Radvdump
+
+Radvddump dumps a details of the flags it finds in a routing advertisement and makes an assumption on what the radvd.conf will look like, run it in the following way:
+
+   radvdump
+
+[edit] DHCPDv6 Configuration Examples
+[edit] State 1
+
+In this configuration no DHCP or other information is sent to the client, thus DHCP is not used. IP's are instead obtained using SLAAC, an explanation as to how SLAAC functions is available here.
+[edit] State 2
+
+   default-lease-time 2592000;
+   preferred-lifetime 604800;
+   option dhcp-renewal-time 3600;
+   option dhcp-rebinding-time 7200;
+   allow leasequery;
+   
+   option dhcp6.name-servers <IPv6 DNS Server address>;
+   option dhcp6.domain-search "<domain name suffix";
+   option space docsis code width 2 length width 2;
+   option vsio.docsis code 4491 = encapsulate docsis;
+   option docsis.tftp-servers code 32 = array of ip6-address;
+   option docsis.cablelabs-configuration-file code 33 = text;
+   option docsis.time-servers code 37 = array of ip6-address;
+   option docsis.time-offset code 38 = signed integer 32;
+   
+   option docsis.tftp-servers <IPv6 TFTP server IP address>;
+   option docsis.cablelabs-configuration-file "<Configuration file to be used by CM>";
+   option docsis.time-servers <IPv6 DNS Server IP>;
+   option docsis.time-offset -1;
+
+[edit] State 3
+
+   default-lease-time 2592000;
+   preferred-lifetime 604800;
+   option dhcp-renewal-time 3600;
+   option dhcp-rebinding-time 7200;
+   allow leasequery;
+   
+   subnet6 <IPv6 address>/<Mask> {
+           range6 <first allowed IP> <last allowed IP>;
+   }
+
+[edit] State 4
+
+   default-lease-time 2592000;
+   preferred-lifetime 604800;
+   option dhcp-renewal-time 3600;
+   option dhcp-rebinding-time 7200;
+   allow leasequery;
+   
+   option dhcp6.name-servers <IPv6 DNS Server address>;
+   option dhcp6.domain-search "<domain name suffix";
+   option space docsis code width 2 length width 2;
+   option dhcp6.rtprefix code 243 = {unsigned integer 32, unsigned integer 8, unsigned integer 8, ip6-address };
+   option vsio.docsis code 4491 = encapsulate docsis;
+   option docsis.tftp-servers code 32 = array of ip6-address;
+   option docsis.cablelabs-configuration-file code 33 = text;
+   option docsis.time-servers code 37 = array of ip6-address;
+   option docsis.time-offset code 38 = signed integer 32;
+   option dhcp6.next-hop code 242 = ip6-address;
+    
+   subnet6 <IPv6 address>/<Mask> {
+           range6 <first allowed IP> <last allowed IP>;
+           option docsis.tftp-servers <IPv6 TFTP server IP address>;
+           option docsis.cablelabs-configuration-file "<Configuration file to be used by CM>";
+           option docsis.time-servers <IPv6 DNS Server IP>;
+           option docsis.time-offset -1;
+           option dhcp6.next-hop <IPv6 Next hop address>;
+   }
+
+[edit] CMTS Configuration Examples
+[edit] State 1
+
+   interface cable-mac <interface>
+   ipv6 enable
+   ipv6 address <address>/<suffix>
+   no ipv6 nd managed-config-flag
+   no ipv6 nd other-config-flag
+   ipv6 nd prefix <route address>/<suffix> no-advertise
+
+[edit] State 2
+
+    interface cable-mac <interface>
+    ipv6 enable
+    ipv6 address <address>/<suffix> dhcp-link-address any
+    ipv6 dhcp relay destination <IPv6 DHCP server address>
+    no ipv6 nd managed-config-flag
+    ipv6 nd other-config-flag
+    ipv6 nd ra interval 3 300
+    ipv6 nd ra lifetime 180
+    ipv6 nd ns-interval 1000
+    ipv6 no nd ra suppress
+    ipv6 nd prefix <route address>/<suffix> no-advertise
+
+[edit] State 3
+
+   interface cable-mac <interface>
+   ipv6 enable
+   ipv6 address <address>/<suffix> dhcp-link-address any
+   ipv6 dhcp relay destination <IPv6 DHCP server address>
+   ipv6 nd managed-config-flag
+   no ipv6 nd other-config-flag
+   ipv6 nd ra interval 3 300
+   ipv6 nd ra lifetime 180
+   ipv6 nd ns-interval 1000
+   ipv6 no nd ra suppress
+   ipv6 nd prefix <route address>/<suffix>
+
+[edit] State 4
+
+   interface cable-mac 10.0
+   ipv6 enable
+   ipv6 address <address>/<suffix> dhcp-link-address any
+   ipv6 dhcp relay destination <IPv6 DHCP server address>
+   ipv6 nd managed-config-flag
+   ipv6 nd other-config-flag
+   ipv6 nd ra interval 3 300
+   ipv6 nd ra lifetime 180
+   ipv6 nd ns-interval 1000
+   ipv6 no nd ra suppress
+   ipv6 nd prefix <route address>/<suffix>
+
+[edit] Client Notes
+[edit] Windows
+
+    Windows by default will provide random IPv6 addresses, to disable this feature and have a set IP (either via SLAAC or DHCP), run the following commands: 
+
+
+   netsh interface ipv6 6to4 set state disabled
+   netsh interface teredo set state disabled
+   netsh interface ipv6 set privacy state=disabled store=active
+   netsh interface ipv6 set privacy state=disabled store=persistent
+   netsh interface ipv6 set global randomizeidentifiers=disabled store=active
+   netsh interface ipv6 set global randomizeidentifiers=disabled store=persistent
+
+    To display IPv6 information for each interface run the following command: 
+
+   netsh int ipv6 show add
